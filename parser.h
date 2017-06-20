@@ -113,6 +113,6 @@
 	static int dct_zz[64] = {};
 int decode_init(char *filename, int debug);
 void decode_video_sequence();
-int lookup(uint32_t bits, const int code[], const int length[], const int value[], int size);
+int lookup(uint32_t bits, const int code[], const int length[], const int value[], int size, int *_run, int *_level);
 
 #endif

@@ -28,15 +28,51 @@ int lookup(uint32_t bits, const int code[], const int length[], const int value[
 		}
 	}
 	printf("lookup error!\n");
+	exit(0);
 }
-void block(int i){
-	if(DEBUG)
-		printf("==BLOCK(%d)\n", i);
+int lookup_coeff(uint32_t bits, const int code[], const int length[], const int run[], const int level[], int size, int *_run, int *_level){
+	for(int i = 0; i < size; i++){		
+		if(bits>>(32-length[i]) == code[i]){
+			int redundant = bitstream.read(length[i]);
+			if(run[i] == -1){
+				return -1;
+			}
+			else if(run[i] == -2){
+				if(DEBUG) printf("dct_dc_first: ESCAPE\n");
+	            *_run = bitstream.read(6);
+	            int prefix = bitstream.read(8);
+	            if(prefix == 0x80) // '1000 0000'
+	                *_level = -256 + bitstream.read(8);
+	            else if(prefix == 0x0) // '0000 0000'
+	                *_level = bitstream.read(8);
+	            else {
+	                if(prefix>>7 == 1) *_level = -128 + (prefix&0x7f);
+	                else *_level = prefix;
+	            }
+	            return 0;
+			}
+			else{
+				*_run = run[i];
+				if(bitstream.read(1) == 0) *_level = level[i];
+				else *_level = -level[i];
+				return 0;
+			}
+			
+		}
+	}
+	printf("lookup_coeff error!\n");
+	exit(0);
+}
+void block(int i){	
+	memset(dct_zz, 0, sizeof(dct_zz[0])*64);
+	int zz_pos = 0, run, level, ret;
 	if(pattern_code[i]){
+		if(DEBUG)
+			printf("==BLOCK(%d)==\n", i);
 		if(macroblock_intra){
 			if(i<4){
 				dct_dc_size_luminance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_luminance_code, dct_dc_size_luminance_length, 
-												dct_dc_size_luminance_vlaue, 9);
+												dct_dc_size_luminance_value, 9);
 				if(dct_dc_size_luminance != 0){ 
 					dct_dc_differential = bitstream.read(dct_dc_size_luminance);
 					if ( dct_dc_differential & ( 1 << (dct_dc_size_luminance-1)) ) dct_zz[0] = dct_dc_differential ;
@@ -49,11 +85,11 @@ void block(int i){
 			}
 			else{
 				dct_dc_size_chrominance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_chrominance_code, dct_dc_size_chrominance_length, 
-												dct_dc_size_chrominance_vlaue, 9);
+												dct_dc_size_chrominance_value, 9);
 				if(dct_dc_size_chrominance != 0){ 
 					dct_dc_differential = bitstream.read(dct_dc_size_chrominance);
-					if ( dct_dc_differential & ( 1 << (dct_dc_size_chrominance-1)) ) dct_zz[0] = dct_dc_differential ;
-					else dct_zz[0] = ( -1 << (dct_dc_size_chrominance) ) | (dct_dc_differential+1) ;
+					if ( dct_dc_differential & ( 1 << (dct_dc_size_chrominance-1)) ) dct_zz[zz_pos++] = dct_dc_differential ;
+					else dct_zz[zz_pos++] = ( -1 << (dct_dc_size_chrominance) ) | (dct_dc_differential+1) ;
 				}
 				if(DEBUG){
 					printf("\tdct_dc_size_chrominance: %d\n", dct_dc_size_chrominance);
@@ -62,16 +98,35 @@ void block(int i){
 			}
 		}
 		else{
-			dct_coeff_first;
-			
+			ret = lookup_coeff((uint32_t)bitstream.nextbits(), dct_coeff_first_code, dct_coeff_first_length, dct_coeff_first_run, dct_coeff_first_level, 113, &run, &level);
+			if(ret == -1)
+				printf("EOB-1\n");
+			else{
+				printf("dct_coeff_first: run = %d, level = %d\n", run, level);
+				zz_pos = run;
+				dct_zz[zz_pos] = level;
+			}
 		}
-	}
-	if(picture_coding_type != 4){
-		while(bitstream.nextbits()>>30 != 10) dct_coeff_next;
-		end_of_block = bitstream.read(2);
+		if(picture_coding_type != 4){
+			while(bitstream.nextbits()>>30 != 0b10) {
+				ret = lookup_coeff((uint32_t)bitstream.nextbits(), dct_coeff_second_code, dct_coeff_second_length, dct_coeff_second_run, dct_coeff_second_level, 113, &run, &level);
+				if(ret == -1){
+					printf("EOB-2\n");
+					break;
+				}
+				else{
+					printf("dct_coeff_next: run = %d, level = %d\n", run, level);
+					zz_pos += (run+1);
+					dct_zz[zz_pos] = level;
+				}
+			}
+		}
 	}
 }
 void macroblock(){
+	static int mcb_cnt = 1;
+	if(DEBUG)
+		printf("==macroblock(%d)==\n", mcb_cnt++);
 	while(bitstream.nextbits()>>21 == 0b00000001111)
 		macroblock_stuffing = bitstream.read(11);
 	macroblock_address_increment = 0;
@@ -103,7 +158,11 @@ void macroblock(){
 		motion_vertical_backward_code = lookup((uint32_t)bitstream.nextbits(), motion_code, motion_code_length, motion_code_value, 33);
 		if(backward_f != 1 && motion_vertical_backward_code != 0) motion_vertical_backward_r = bitstream.read(backward_r_size);
 	}
+	coded_block_pattern = 0;
 	if(macroblock_pattern) coded_block_pattern = lookup((uint32_t)bitstream.nextbits(), cbp_code, cbp_code_length, cbp_code_value, 63);
+	if(DEBUG)
+		printf("macroblock_address_increment = %d, macroblock_type = %d, cbp = %d\n", macroblock_address_increment, macroblock_type, coded_block_pattern);
+	memset(pattern_code, 0, sizeof(pattern_code[0])*6);
 	for (int i = 0; i < 6; ++i)
 	{
 		if(coded_block_pattern&(1<<(5-i))) pattern_code[i] = 1;
@@ -112,12 +171,12 @@ void macroblock(){
 	for(int i = 0; i < 6; i++)
 		block(i);
 	if(picture_coding_type == 4) end_of_macroblock = bitstream.read(1);
-	if(DEBUG)
-		printf("macroblock_address_increment = %d, macroblock_type = %d, cbp = %d\n", macroblock_address_increment, macroblock_type, coded_block_pattern);
-	exit(0);
+	
+
 }
 void slice(){
-	if(bitstream.read(32) != slice_start_code)
+	int redundant = bitstream.read(32);
+	if(redundant < slice_start_code_start || redundant > slice_start_code_end)
 		return;
 	quantizer_scale = bitstream.read(5);
 	while(bitstream.nextbits()>>31 == 1){
@@ -133,6 +192,8 @@ void slice(){
 	bitstream.next_start_code();
 }
 void picture(){
+	static int pic_cnt = 1;
+	printf("==picture(%d)==\n", pic_cnt++);
 	if(bitstream.read(32) != picture_start_code)
 		return;
 	temporal_reference = bitstream.read(10);
