@@ -4,10 +4,13 @@
 #include "parser.h"
 #include "bitstream.h"
 #include "vlc.h"
+#include "util.h"
 
 static int DEBUG = 0;
-
+static int pic_cnt = 0;
+#define DO_BMP
 InBitStream bitstream;
+int Sign(int a){ return (a > 0) ? 1 : (a < 0) ? -1 : 0;}
 int decode_init(char *filename, int debug){
 	DEBUG = debug;
 	bitstream.open(filename);
@@ -63,20 +66,86 @@ int lookup_coeff(uint32_t bits, const int code[], const int length[], const int 
 	printf("lookup_coeff error!\n");
 	exit(0);
 }
-void block(int i){	
-	memset(dct_zz, 0, sizeof(dct_zz[0])*64);
+/*decode I-frame*/
+void decode_intro_coded_macroblock(int block_num){
+	/*recon dct*/
+	for (int m=0; m<8; m++) {
+		for (int n=0; n<8; n++) {
+			int i = scan[m][n] ;
+			dct_recon[m][n] = ( dct_zz[i] * quantizer_scale * intra_quantizer_matrix[m][n] ) /8 ;
+			if ( ( dct_recon[m][n] & 1 ) == 0 )	dct_recon[m][n] -= Sign(dct_recon[m][n]) ;
+			if (dct_recon[m][n] > 2047) dct_recon[m][n] = 2047 ;
+			if (dct_recon[m][n] < -2048) dct_recon[m][n] = -2048 ;
+		}
+	}
+	int dct_dc_add = 0;
+    if(block_num < 4) {
+        if(block_num == 0 && macroblock_address - past_intra_address > 1) dct_dc_add = 1024;
+        else dct_dc_add = dct_dc_y_past;
+    }
+    else {
+        if(macroblock_address - past_intra_address > 1) dct_dc_add = 1024;
+        else {
+            if(block_num == 4) dct_dc_add = dct_dc_cb_past;
+            else dct_dc_add = dct_dc_cr_past;
+        }
+    }
+    dct_recon[0][0] = dct_dc_add + dct_zz[0] * 8;
+     
+    if(block_num < 4) dct_dc_y_past = dct_recon[0][0];
+    else if(block_num == 4) dct_dc_cb_past = dct_recon[0][0];
+    else dct_dc_cr_past = dct_recon[0][0];
+    past_intra_address = macroblock_address ;
+    /*IDCT*/
+    int dest[8][8];
+    IDCT(dest, dct_recon);
+    //IDCT(dct_recon);
+    /*if(DEBUG){
+    	for(int i = 0; i < 8; i++){
+    		for(int j = 0; j < 8; j++){
+    			printf("%3d ", dct_recon[i][j]);
+    		}
+    		printf("\n");
+    	}
+    }
+    system("pause");*/
+    if(block_num < 4) {
+        int r = (mb_row<<4) + ((block_num>>1)<<3); // mb_row*16 + block/2*8
+        int c = (mb_column<<4) + ((block_num&1)<<3); // mb_column*16 + block%2*8
+        fillY(r, c, dest, pic_cnt);
+    }
+    else {
+        int r = mb_row<<3; // mb_row*8
+        int c = mb_column<<3; // mb_column*8
+        if(block_num == 4)
+           fillCb(r, c, dest, pic_cnt);
+        else
+           fillCr(r, c, dest, pic_cnt);
+    }
+}
+/*decode P-frame*/
+void decode_predictive_coded_macroblocks_p(int block_num){
+	;
+}
+/*decode B-frame*/
+void decode_predictive_coded_macroblocks_b(int block_num){
+	;
+}
+void block(int block_num){	
+	memset(dct_zz, 0, sizeof(int)*64);
 	int zz_pos = 0, run, level, ret;
-	if(pattern_code[i]){
+	if(pattern_code[block_num]){
 		if(DEBUG)
-			printf("==BLOCK(%d)==\n", i);
+			printf("==BLOCK(%d)==\n", block_num);
 		if(macroblock_intra){
-			if(i<4){
+			if(block_num<4){
+				//dct_dc_size_luminance = dct_dc_differential = 0;
 				dct_dc_size_luminance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_luminance_code, dct_dc_size_luminance_length, 
 												dct_dc_size_luminance_value, 9);
 				if(dct_dc_size_luminance != 0){ 
 					dct_dc_differential = bitstream.read(dct_dc_size_luminance);
-					if ( dct_dc_differential & ( 1 << (dct_dc_size_luminance-1)) ) dct_zz[0] = dct_dc_differential ;
-					else dct_zz[0] = ( -1 << (dct_dc_size_luminance) ) | (dct_dc_differential+1) ;
+					if ( dct_dc_differential & ( 1 << (dct_dc_size_luminance-1)) ) dct_zz[zz_pos] = dct_dc_differential ;
+					else dct_zz[zz_pos] = ( -1 << (dct_dc_size_luminance) ) | (dct_dc_differential+1) ;
 				}
 				if(DEBUG){
 					printf("\tdct_dc_size_luminance: %d\n", dct_dc_size_luminance);
@@ -84,12 +153,13 @@ void block(int i){
 				}
 			}
 			else{
+				//dct_dc_size_chrominance = dct_dc_differential = 0;
 				dct_dc_size_chrominance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_chrominance_code, dct_dc_size_chrominance_length, 
 												dct_dc_size_chrominance_value, 9);
 				if(dct_dc_size_chrominance != 0){ 
 					dct_dc_differential = bitstream.read(dct_dc_size_chrominance);
-					if ( dct_dc_differential & ( 1 << (dct_dc_size_chrominance-1)) ) dct_zz[zz_pos++] = dct_dc_differential ;
-					else dct_zz[zz_pos++] = ( -1 << (dct_dc_size_chrominance) ) | (dct_dc_differential+1) ;
+					if ( dct_dc_differential & ( 1 << (dct_dc_size_chrominance-1)) ) dct_zz[zz_pos] = dct_dc_differential ;
+					else dct_zz[zz_pos] = ( -1 << (dct_dc_size_chrominance) ) | (dct_dc_differential+1) ;
 				}
 				if(DEBUG){
 					printf("\tdct_dc_size_chrominance: %d\n", dct_dc_size_chrominance);
@@ -99,10 +169,13 @@ void block(int i){
 		}
 		else{
 			ret = lookup_coeff((uint32_t)bitstream.nextbits(), dct_coeff_first_code, dct_coeff_first_length, dct_coeff_first_run, dct_coeff_first_level, 113, &run, &level);
-			if(ret == -1)
-				printf("EOB-1\n");
+			if(ret == -1){
+				if(DEBUG)
+					printf("EOB-1\n");
+			}
 			else{
-				printf("dct_coeff_first: run = %d, level = %d\n", run, level);
+				if(DEBUG)
+					printf("dct_coeff_first: run = %d, level = %d\n", run, level);
 				zz_pos = run;
 				dct_zz[zz_pos] = level;
 			}
@@ -111,12 +184,14 @@ void block(int i){
 			while(bitstream.nextbits()>>30 != 0b10) {
 				ret = lookup_coeff((uint32_t)bitstream.nextbits(), dct_coeff_second_code, dct_coeff_second_length, dct_coeff_second_run, dct_coeff_second_level, 113, &run, &level);
 				if(ret == -1){
-					printf("EOB-2\n");
+					if(DEBUG)
+						printf("EOB-2\n");
 					break;
 				}
 				else{
-					printf("dct_coeff_next: run = %d, level = %d\n", run, level);
-					zz_pos += (run+1);
+					if(DEBUG)
+						printf("dct_coeff_next: run = %d, level = %d\n", run, level);
+					zz_pos += run+1;
 					dct_zz[zz_pos] = level;
 				}
 			}
@@ -135,6 +210,10 @@ void macroblock(){
 		macroblock_address_increment += 33;
 	}
 	macroblock_address_increment += lookup((uint32_t)bitstream.nextbits(), mbai_code, mbai_code_length, mbai_code_value, 33);
+	macroblock_address = previous_macroblock_address + macroblock_address_increment;
+    previous_macroblock_address = macroblock_address;
+    mb_row = macroblock_address / mb_width;
+    mb_column = macroblock_address % mb_width;
 	if(picture_coding_type == 1) macroblock_type = lookup((uint32_t)bitstream.nextbits(), mbtype_i, mbtype_i_length, mbtype_i_value, 2); // I
 	else if(picture_coding_type == 2) macroblock_type = lookup((uint32_t)bitstream.nextbits(), mbtype_p, mbtype_p_length, mbtype_p_value, 7); // P
 	else if (picture_coding_type == 3) macroblock_type = lookup((uint32_t)bitstream.nextbits(), mbtype_b, mbtype_b_length, mbtype_b_value, 11); // B
@@ -144,7 +223,6 @@ void macroblock(){
 	macroblock_motion_backward = (macroblock_type>>2)&1;
 	macroblock_pattern = (macroblock_type>>1)&1;
 	macroblock_intra = macroblock_type&1;
-
 	if(macroblock_quant) quantizer_scale = bitstream.read(5);
 	if(macroblock_motion_forward){
 		motion_horizontal_forward_code = lookup((uint32_t)bitstream.nextbits(), motion_code, motion_code_length, motion_code_value, 33);
@@ -163,21 +241,31 @@ void macroblock(){
 	if(DEBUG)
 		printf("macroblock_address_increment = %d, macroblock_type = %d, cbp = %d\n", macroblock_address_increment, macroblock_type, coded_block_pattern);
 	memset(pattern_code, 0, sizeof(pattern_code[0])*6);
-	for (int i = 0; i < 6; ++i)
+	for (int i = 0; i < 6; i++)
 	{
 		if(coded_block_pattern&(1<<(5-i))) pattern_code[i] = 1;
 		if(macroblock_intra) pattern_code[i] = 1;
 	}
-	for(int i = 0; i < 6; i++)
+	for(int i = 0; i < 6; i++){
 		block(i);
-	if(picture_coding_type == 4) end_of_macroblock = bitstream.read(1);
+		if(macroblock_intra) decode_intro_coded_macroblock(i);
+		else if(picture_coding_type == 2) decode_predictive_coded_macroblocks_p(i);
+		else decode_predictive_coded_macroblocks_b(i);
+	}
 	
+	if(picture_coding_type == 4) end_of_macroblock = bitstream.read(1);
 
 }
 void slice(){
-	int redundant = bitstream.read(32);
-	if(redundant < slice_start_code_start || redundant > slice_start_code_end)
+	int start_code = bitstream.read(32);
+	if(start_code < slice_start_code_start || start_code > slice_start_code_end)
 		return;
+	slice_vertical_position = start_code&0xff;
+	previous_macroblock_address=(slice_vertical_position-1)*mb_width-1;
+	dct_dc_y_past = 1024;
+    dct_dc_cb_past = 1024;
+    dct_dc_cr_past = 1024;
+    past_intra_address = -2;
 	quantizer_scale = bitstream.read(5);
 	while(bitstream.nextbits()>>31 == 1){
 		extra_bit_slice = bitstream.read(1);
@@ -192,8 +280,9 @@ void slice(){
 	bitstream.next_start_code();
 }
 void picture(){
-	static int pic_cnt = 1;
-	printf("==picture(%d)==\n", pic_cnt++);
+	
+	if(DEBUG)
+		printf("==picture(%d)==\n", pic_cnt);
 	if(bitstream.read(32) != picture_start_code)
 		return;
 	temporal_reference = bitstream.read(10);
@@ -232,6 +321,11 @@ void picture(){
 	do{
 		slice();
 	}while(bitstream.nextbits() >= slice_start_code_start && bitstream.nextbits() <= slice_start_code_end);
+	
+#ifdef DO_BMP
+    BMP((int)vertical_size, (int)horizontal_size, pic_cnt);
+#endif
+   pic_cnt++; 
 }
 void group_of_pictures(){
 	if(bitstream.read(32) != group_start_code)
@@ -268,6 +362,8 @@ void sequence_header(){
 	if(bitstream.read(32) != sequence_header_code)
 		return;
 	horizontal_size = bitstream.read(12);
+	mb_width = (horizontal_size+15)/16;
+	mb_height = (vertical_size+15)/16;
 	vertical_size = bitstream.read(12);
 	pel_aspect_ratio = bitstream.read(4);
 	picture_rate = bitstream.read(4);
@@ -277,11 +373,15 @@ void sequence_header(){
 	constrained_parameter_flag = bitstream.read(1);
 	load_intra_quantizer_matrix = bitstream.read(1);
 	if(load_intra_quantizer_matrix){
-		for(int i = 0; i < 64; i++) intra_quantizer_matrix[i] = bitstream.read(8);
+		for(int i = 0; i < 8; i++)
+			for(int j = 0; j < 8; j++)
+		 		intra_quantizer_matrix[i][j] = bitstream.read(8);
 	}
 	load_non_intra_quantizer_matrix = bitstream.read(1);
 	if(load_non_intra_quantizer_matrix){
-		for(int i = 0; i < 64; i++) non_intra_quantizer_matrix[i] = bitstream.read(8);
+		for(int i = 0; i < 8; i++) 
+			for(int j = 0; j < 8; j++)
+				non_intra_quantizer_matrix[i][j] = bitstream.read(8);
 	}
 	bitstream.next_start_code();
 	if(bitstream.nextbits() == extension_start_code){
@@ -313,7 +413,7 @@ void decode_video_sequence(){
 		do{
 			group_of_pictures();
 		}while(bitstream.nextbits() == group_start_code);
+		
 	}while(bitstream.nextbits() == sequence_header_code);
-
 	printf("end\n");
 }

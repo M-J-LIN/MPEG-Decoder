@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "parser.h"
 
-#define DEBUG 1
+#define DEBUG 0
 int main(int argc, char* argv[]){
 	if(argc != 2){
 		printf("need an input MPEG file\n");             
