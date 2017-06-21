@@ -8,7 +8,7 @@
 
 static int DEBUG = 0;
 static int pic_cnt = 0;
-#define DO_BMP
+//#define DO_BMP
 InBitStream bitstream;
 int Sign(int a){ return (a > 0) ? 1 : (a < 0) ? -1 : 0;}
 int decode_init(char *filename, int debug){

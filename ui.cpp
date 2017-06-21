@@ -32,13 +32,13 @@ void ClientResize(HWND hWnd, int nWidth, int nHeight)
     MoveWindow(hWnd,rcWind.left, rcWind.top, nWidth + ptDiff.x, nHeight + ptDiff.y, TRUE);
 }
  
-void frame_update(HWND hwnd, int start_time) {
+void frame_update(HWND hwnd, double start_time) {
      
     // Wait until next frame should be shown
-    //cout << picture_rate << endl;
-    while((double)(clock()-start_time)/1000 * 10 < frame_cnt)
-        return;
-     
+    /*while((double)(clock()-start_time)/1000 * pictures_per_second[picture_rate] < frame_cnt)
+        return;*/
+    
+    while((clock()-start_time)/CLOCKS_PER_SEC < 1/pictures_per_second[picture_rate]);
     // Next frame
     frame_cnt++;
     int width = 320;
@@ -148,9 +148,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     UpdateWindow(hwnd); // redraw
      
      
-    // Modified Step 3.
-    int start_time = clock();
+    // Modified Step 3.   
+    Sleep(1000);
     while(1) {
+       
         if(PeekMessage(&Msg, NULL, 0, 0, 0)) {  // non-blocking
             if(GetMessage(&Msg, NULL, 0, 0) > 0) {
                 TranslateMessage(&Msg);
@@ -159,7 +160,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             else break;
         }
         //cout << "frame_update" << endl;
-        Sleep(1);
+        double start_time = clock();
         frame_update(hwnd, start_time);
     }
     return Msg.wParam;

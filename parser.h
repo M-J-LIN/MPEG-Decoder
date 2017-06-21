@@ -31,6 +31,7 @@
 	static uint32_t vertical_size;
 	static uint32_t pel_aspect_ratio;
 	static uint32_t picture_rate;
+	static float pictures_per_second[8] = {23.976, 24, 25, 30, 30, 50, 60, 60};
 	static uint32_t bit_rate;
 	static uint32_t marker_bit;
 	static uint32_t vbv_buffer_size;
@@ -54,14 +55,7 @@
 														 {16, 16, 16, 16, 16, 16, 16, 16},
 														 {16, 16, 16, 16, 16, 16, 16, 16}};
 	static int sequence_extension_data;
-	static uint32_t intra_quantizer_matrix_zz[64] = {  8, 16, 19, 22, 26, 27, 29, 34,
-													  16, 16, 22, 24, 27, 29, 34, 37,
-													  19, 22, 26, 27, 29, 34, 34, 38,
-													  22, 22, 26, 27, 29, 34, 37, 40,
-													  22, 26, 27, 29, 32, 35, 40, 48,
-													  26, 27, 29, 32, 35, 40, 48, 58,
-													  26, 27, 29, 34, 38, 46, 56, 69,
-													  27, 29, 35, 38, 46, 56, 69, 83};
+
 /*Group of Pictures Layer*/
 	void group_of_pictures();
 	static uint32_t time_code;
