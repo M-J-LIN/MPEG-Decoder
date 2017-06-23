@@ -37,23 +37,23 @@
 	static uint32_t vbv_buffer_size;
 	static uint32_t constrained_parameter_flag;
 	static uint32_t load_intra_quantizer_matrix;
-	static int intra_quantizer_matrix[8][8] = {  { 8, 16, 19, 22, 26, 27, 29, 34},
-													  {16, 16, 22, 24, 27, 29, 34, 37},
-													  {19, 22, 26, 27, 29, 34, 34, 38},
-													  {22, 22, 26, 27, 29, 34, 37, 40},
-													  {22, 26, 27, 29, 32, 35, 40, 48},
-													  {26, 27, 29, 32, 35, 40, 48, 58},
-													  {26, 27, 29, 34, 38, 46, 56, 69},
-													  {27, 29, 35, 38, 46, 56, 69, 83}};
+	static int intra_quantizer_matrix[8][8] = { { 8, 16, 19, 22, 26, 27, 29, 34},
+												{16, 16, 22, 24, 27, 29, 34, 37},
+												{19, 22, 26, 27, 29, 34, 34, 38},
+												{22, 22, 26, 27, 29, 34, 37, 40},
+												{22, 26, 27, 29, 32, 35, 40, 48},
+												{26, 27, 29, 32, 35, 40, 48, 58},
+												{26, 27, 29, 34, 38, 46, 56, 69},
+												{27, 29, 35, 38, 46, 56, 69, 83}};
 	static int load_non_intra_quantizer_matrix;
 	static int non_intra_quantizer_matrix[8][8]= {  {16, 16, 16, 16, 16, 16, 16, 16},
-														 {16, 16, 16, 16, 16, 16, 16, 16},
-														 {16, 16, 16, 16, 16, 16, 16, 16},
-														 {16, 16, 16, 16, 16, 16, 16, 16},
-														 {16, 16, 16, 16, 16, 16, 16, 16},
-														 {16, 16, 16, 16, 16, 16, 16, 16},
-														 {16, 16, 16, 16, 16, 16, 16, 16},
-														 {16, 16, 16, 16, 16, 16, 16, 16}};
+													{16, 16, 16, 16, 16, 16, 16, 16},
+													{16, 16, 16, 16, 16, 16, 16, 16},
+													{16, 16, 16, 16, 16, 16, 16, 16},
+													{16, 16, 16, 16, 16, 16, 16, 16},
+													{16, 16, 16, 16, 16, 16, 16, 16},
+													{16, 16, 16, 16, 16, 16, 16, 16},
+													{16, 16, 16, 16, 16, 16, 16, 16}};
 	static int sequence_extension_data;
 
 /*Group of Pictures Layer*/
@@ -128,11 +128,28 @@
 	static uint32_t end_of_block;
 	static int dct_zz[64] = {};
 	static int dct_recon[8][8];
+	static int pel[8][8];
+	static int pel_for[8][8];
+	static int pel_back[8][8];
+	static int pel_past_for;
+	static int pel_past_back;
 	static int dct_dc_y_past;
 	static int dct_dc_cb_past;
 	static int dct_dc_cr_past;
+/*I-Pictures*/
 	static int past_intra_address;
+/*P-Pictures*/
+	static int recon_right_for;
+	static int recon_down_for;
+	static int recon_right_for_prev;
+	static int recon_down_for_prev;
+
+/*B-Pictures*/
+	static int recon_right_back;
+	static int recon_down_back;
+	static int recon_right_back_prev;
+	static int recon_down_back_prev;
 int decode_init(char *filename, int debug);
 void decode_video_sequence();
-int lookup(uint32_t bits, const int code[], const int length[], const int value[], int size, int *_run, int *_level);
+void get_hor_ver(int *horizontal, int *vertical);
 #endif

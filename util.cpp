@@ -61,19 +61,6 @@ void idct(int matrix[8][8]) {
         matrix[y][4] = 0.5 + a3 - b3;
     }
 }
-void IDCT(int dest[8][8], int source[8][8]){
-	for(int i = 0; i < 8; i++){
-		for(int j = 0; j < 8; j++){
-			float sum = 0;
-			for(int k = 0; k < 8; k++){
-				for(int l = 0; l < 8; l++){
-					sum += cu[k] * cv[l] * cos_tb[i][k] * cos_tb[j][l] * source[k][l];	
-				}
-			}
-			dest[i][j]  = sum/4;
-		}
-	}
-}
 int R(int y, int cb, int cr){
 	float sum = y+1.402*(cr-128);
 	if(sum >= 255)
@@ -101,7 +88,7 @@ int B(int y, int cb, int cr){
 	else
 		return sum;
 }
-PIC_BUF pic_buf[200];
+
 static uint8_t bmp[1024][1024][3];
 void genbmp(int height, int width, int frame_num){
 	typedef struct { 
@@ -151,30 +138,23 @@ void genbmp(int height, int width, int frame_num){
 	
 	fclose(wfp);	
 }
-void BMP(int height, int width, int frame_num){
+void BMP(int height, int width, int frame_num, PIC_BUF pic_buf[]){
 	int cb_h_idx, cr_h_idx, cb_w_idx, cr_w_idx;
 	for (int i = 0; i < height; i++){
-		//cb_h_idx = cr_h_idx = ((i>>4)<<3) + i%8;
-		//if(frame_num == 0)
-		//printf("i == %d.\n", i);
 		for(int j = 0; j < width; j++){
-			//cb_w_idx = cr_w_idx = ((j >> 4) << 3) + j%8;
-			bmp[i][j][2] = R(pic_buf[frame_num].y[i][j], pic_buf[frame_num].cb[i>>1][j>>1], pic_buf[frame_num].cr[i>>1][j>>1]);
-			bmp[i][j][1] = G(pic_buf[frame_num].y[i][j], pic_buf[frame_num].cb[i>>1][j>>1], pic_buf[frame_num].cr[i>>1][j>>1]);
-			bmp[i][j][0] = B(pic_buf[frame_num].y[i][j], pic_buf[frame_num].cb[i>>1][j>>1], pic_buf[frame_num].cr[i>>1][j>>1]);
-			//if(frame_num == 0)
-				//printf("(%d, %d, %d)", bmp[i][j][2], bmp[i][j][1], bmp[i][j][0]);
+			bmp[i][j][2] = R(pic_buf[frame_num].ycbcr[0][i][j], pic_buf[frame_num].ycbcr[1][i>>1][j>>1], pic_buf[frame_num].ycbcr[2][i>>1][j>>1]);
+			bmp[i][j][1] = G(pic_buf[frame_num].ycbcr[0][i][j], pic_buf[frame_num].ycbcr[1][i>>1][j>>1], pic_buf[frame_num].ycbcr[2][i>>1][j>>1]);
+			bmp[i][j][0] = B(pic_buf[frame_num].ycbcr[0][i][j], pic_buf[frame_num].ycbcr[1][i>>1][j>>1], pic_buf[frame_num].ycbcr[2][i>>1][j>>1]);
 		}
 	}
 	genbmp(height, width, frame_num);
-	//exit(0);
 }
-void fillY(int r, int c, int dct_recon[8][8], int frame_num){
-	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].y[r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
+void fillY(int r, int c, int dct_recon[8][8], int frame_num, PIC_BUF pic_buf[]){
+	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].ycbcr[0][r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
 }
-void fillCb(int r, int c, int dct_recon[8][8], int frame_num){
-	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].cb[r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
+void fillCb(int r, int c, int dct_recon[8][8], int frame_num, PIC_BUF pic_buf[]){
+	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].ycbcr[1][r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
 }
-void fillCr(int r, int c, int dct_recon[8][8], int frame_num){
-	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].cr[r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
+void fillCr(int r, int c, int dct_recon[8][8], int frame_num, PIC_BUF pic_buf[]){
+	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].ycbcr[2][r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
 }

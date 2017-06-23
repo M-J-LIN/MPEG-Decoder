@@ -8,6 +8,8 @@
 
 static int DEBUG = 0;
 static int pic_cnt = 0;
+static int max_temp = 0;
+PIC_BUF pic_buf[200];
 //#define DO_BMP
 InBitStream bitstream;
 int Sign(int a){ return (a > 0) ? 1 : (a < 0) ? -1 : 0;}
@@ -94,13 +96,10 @@ void decode_intro_coded_macroblock(int block_num){
      
     if(block_num < 4) dct_dc_y_past = dct_recon[0][0];
     else if(block_num == 4) dct_dc_cb_past = dct_recon[0][0];
-    else dct_dc_cr_past = dct_recon[0][0];
-    past_intra_address = macroblock_address ;
+    else dct_dc_cr_past = dct_recon[0][0];   
     /*IDCT*/
-    int dest[8][8];
-    IDCT(dest, dct_recon);
-    //IDCT(dct_recon);
-    /*if(DEBUG){
+    idct(dct_recon);
+    if(DEBUG){
     	for(int i = 0; i < 8; i++){
     		for(int j = 0; j < 8; j++){
     			printf("%3d ", dct_recon[i][j]);
@@ -108,28 +107,327 @@ void decode_intro_coded_macroblock(int block_num){
     		printf("\n");
     	}
     }
-    system("pause");*/
     if(block_num < 4) {
-        int r = (mb_row<<4) + ((block_num>>1)<<3); // mb_row*16 + block/2*8
-        int c = (mb_column<<4) + ((block_num&1)<<3); // mb_column*16 + block%2*8
-        fillY(r, c, dest, pic_cnt);
+        int r = (mb_row<<4) + ((block_num>>1)<<3); // mb_row*16 + block_num/2*8
+        int c = (mb_column<<4) + ((block_num&1)<<3); // mb_column*16 + block_num%2*8
+        fillY(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
     }
     else {
         int r = mb_row<<3; // mb_row*8
         int c = mb_column<<3; // mb_column*8
         if(block_num == 4)
-           fillCb(r, c, dest, pic_cnt);
+           fillCb(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
         else
-           fillCr(r, c, dest, pic_cnt);
+           fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
     }
+}
+/*recontruct forward motion vector*/
+void recon_forward_motion_vector(){
+	int complement_horizontal_forward_r;
+    int complement_vertical_forward_r;
+    int right_little;
+    int right_big;
+    int down_little;
+    int down_big;
+    int max = 16 * forward_f - 1;
+    int min = -16 * forward_f;
+    int new_vector;
+    if(macroblock_motion_forward){
+		if (forward_f == 1 || motion_horizontal_forward_code == 0) complement_horizontal_forward_r = 0;
+		else complement_horizontal_forward_r = forward_f - 1 - motion_horizontal_forward_r;
+		if (forward_f == 1 || motion_vertical_forward_code == 0) complement_vertical_forward_r = 0;
+		else complement_vertical_forward_r = forward_f - 1 - motion_vertical_forward_r;
+		right_little = motion_horizontal_forward_code * forward_f;
+		if (right_little == 0) {
+			right_big = 0;
+		}
+		else{
+			if (right_little > 0) {
+				right_little = right_little - complement_horizontal_forward_r ; 
+				right_big = right_little - 32 * forward_f;
+			}
+			else{
+				right_little = right_little + complement_horizontal_forward_r ; 
+				right_big = right_little + 32 * forward_f;
+			}
+		}
+		down_little = motion_vertical_forward_code * forward_f;
+		if (down_little == 0) {
+			down_big = 0;
+		}
+		else{
+			if (down_little > 0) {
+				down_little = down_little - complement_vertical_forward_r ; 
+				down_big = down_little - 32 * forward_f;
+			}
+			else{
+				down_little = down_little + complement_vertical_forward_r ; 
+				down_big = down_little + 32 * forward_f;
+			}
+		}
+		new_vector = recon_right_for_prev + right_little ;
+		if ( new_vector <= max && new_vector >= min ) recon_right_for = new_vector ;
+		else recon_right_for = recon_right_for_prev + right_big ;
+		
+		if ( full_pel_forward_vector ) recon_right_for = recon_right_for << 1 ;
+		new_vector = recon_down_for_prev + down_little ;
+		if ( new_vector <= max && new_vector >= min ) recon_down_for = new_vector ;
+		else recon_down_for = recon_down_for_prev + down_big ;		
+		
+	}
+	recon_right_for_prev = recon_right_for ;
+	recon_down_for_prev = recon_down_for ;
+	if ( full_pel_forward_vector ) {
+		recon_down_for <<= 1;
+		recon_right_for <<= 1;
+	}
+}
+/*recontruct backward motion vector*/
+void recon_backward_motion_vector(){
+	int complement_horizontal_backward_r;
+    int complement_vertical_backward_r;
+    int right_little;
+    int right_big;
+    int down_little;
+    int down_big;
+    int max = 16 * backward_f - 1;
+    int min = -16 * backward_f;
+    int new_vector;
+    if(macroblock_motion_backward){
+		if (backward_f == 1 || motion_horizontal_backward_code == 0) complement_horizontal_backward_r = 0;
+		else complement_horizontal_backward_r = backward_f - 1 - motion_horizontal_backward_r;
+		if (backward_f == 1 || motion_vertical_backward_code == 0) complement_vertical_backward_r = 0;
+		else complement_vertical_backward_r = backward_f - 1 - motion_vertical_backward_r;
+		right_little = motion_horizontal_backward_code * backward_f;
+		if (right_little == 0) {
+			right_big = 0;
+		}
+		else{
+			if (right_little > 0) {
+				right_little = right_little - complement_horizontal_backward_r ; 
+				right_big = right_little - 32 * backward_f;
+			}
+			else{
+				right_little = right_little + complement_horizontal_backward_r ; 
+				right_big = right_little + 32 * backward_f;
+			}
+		}
+		down_little = motion_vertical_backward_code * backward_f;
+		if (down_little == 0) {
+			down_big = 0;
+		}
+		else{
+			if (down_little > 0) {
+				down_little = down_little - complement_vertical_backward_r ; 
+				down_big = down_little - 32 * backward_f;
+			}
+			else{
+				down_little = down_little + complement_vertical_backward_r ; 
+				down_big = down_little + 32 * backward_f;
+			}
+		}
+		new_vector = recon_right_back_prev + right_little ;
+		if ( new_vector <= max && new_vector >= min ) recon_right_back = new_vector ;
+		else recon_right_back = recon_right_back_prev + right_big ;
+		
+		if ( full_pel_backward_vector ) recon_right_back = recon_right_back << 1 ;
+		new_vector = recon_down_back_prev + down_little ;
+		if ( new_vector <= max && new_vector >= min ) recon_down_back = new_vector ;
+		else recon_down_back = recon_down_back_prev + down_big ;		
+		
+	}
+	recon_right_back_prev = recon_right_back ;
+	recon_down_back_prev = recon_down_back ;
+	if ( full_pel_backward_vector ) {
+		recon_down_back <<= 1;
+		recon_right_back <<= 1;
+	}
+}
+/*compute pel*/
+void fill_pel(int pel[8][8], int right_for_back, int down_for_back, int right_half_for_back, int down_half_for_back
+			  ,int pel_past_for_back, int r, int c, int ycbcr_idx){
+	if(!right_half_for_back){
+		if(!down_half_for_back){
+			for(int i = 0; i < 8; i++) 
+				for(int j = 0; j < 8; j++) 
+					pel[i][j] = pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back][c+j+right_for_back];
+		}
+		else{
+			for(int i = 0; i < 8; i++) 
+				for(int j = 0; j < 8; j++) 
+					pel[i][j] = (pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back][c+j+right_for_back] + 
+								 pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back+1][c+j+right_for_back])/2;
+		}
+	}
+	else{
+		if(!down_half_for_back){
+			for(int i = 0; i < 8; i++) 
+				for(int j = 0; j < 8; j++) 
+					pel[i][j] = (pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back][c+j+right_for_back] + 
+								 pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back][c+j+right_for_back+1])/2;
+		}
+		else{
+			for(int i = 0; i < 8; i++) 
+				for(int j = 0; j < 8; j++) 
+					pel[i][j] = (pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back][c+j+right_for_back] + 
+								 pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back+1][c+j+right_for_back] + 
+								 pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back][c+j+right_for_back+1] + 
+								 pic_buf[pel_past_for_back].ycbcr[ycbcr_idx][r+i+down_for_back+1][c+j+right_for_back+1])/4;
+		}	
+	}
 }
 /*decode P-frame*/
 void decode_predictive_coded_macroblocks_p(int block_num){
-	;
+	int r, c, ycbcr_idx, right_for, down_for, right_half_for, down_half_for; 
+	if(block_num < 4){
+		right_for = recon_right_for >> 1 ;
+		down_for = recon_down_for >> 1 ;
+		right_half_for = recon_right_for - 2*right_for ;
+		down_half_for = recon_down_for - 2*down_for ;
+		ycbcr_idx = 0;
+		r = (mb_row<<4) + ((block_num>>1)<<3); // mb_row*16 + block_num/2*8
+        c = (mb_column<<4) + ((block_num&1)<<3); // mb_column*16 + block_num%2*8
+	}
+	else{
+		right_for = ( recon_right_for / 2 ) >> 1 ;
+		down_for = ( recon_down_for / 2 ) >> 1 ;
+		right_half_for = recon_right_for/2 - 2*right_for ;
+		down_half_for = recon_down_for/2 - 2*down_for;
+		r = mb_row<<3; // mb_row*8
+        c = mb_column<<3; // mb_column*8
+		if(block_num == 4) ycbcr_idx = 1;
+		else ycbcr_idx = 2;
+	}
+
+	fill_pel(pel_for, right_for, down_for, right_half_for, down_half_for, pel_past_for, r, c, ycbcr_idx);
+	
+	/*recon dct*/
+	for (int m=0; m<8; m++) {
+		for (int n=0; n<8; n++) {
+			int i = scan[m][n] ;
+			dct_recon[m][n] = ( ((2*dct_zz[i])+Sign(dct_zz[i])) * quantizer_scale * non_intra_quantizer_matrix[m][n] ) /16 ;
+			if ( ( dct_recon[m][n] & 1 ) == 0 )	dct_recon[m][n] -= Sign(dct_recon[m][n]) ;
+			if (dct_recon[m][n] > 2047) dct_recon[m][n] = 2047 ;
+			if (dct_recon[m][n] < -2048) dct_recon[m][n] = -2048 ;
+			if(dct_zz[i] == 0) dct_recon[m][n] = 0;
+		}
+	}
+	/*IDCT*/
+	idct(dct_recon);
+
+	/*add pel to dct_recon*/
+    for(int m=0;m<8;m++){
+    	for(int n=0;n<8;n++){
+    		dct_recon[m][n] += pel_for[m][n];  		
+    	}
+    }
+    /*write to picture buffer*/
+    if(block_num < 4) {
+        fillY(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+    }
+    else {
+        if(block_num == 4)
+           fillCb(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        else
+           fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+    }
+}
+void skipped_macorblocks_p(){
+	for(int i = 0; i < 6; i++){
+		if(i < 4){
+			int r = (mb_row<<4) + ((i>>1)<<3); // mb_row*16 + block_num/2*8
+        	int c = (mb_column<<4) + ((i&1)<<3); // mb_column*16 + block_num%2*8
+        	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[pic_cnt+temporal_reference].ycbcr[0][r+m][c+n] = pic_buf[pel_past_for].ycbcr[0][r+m][c+n];
+		}
+		else{
+			int r = mb_row<<3; // mb_row*8
+        	int c = mb_column<<3; // mb_column*8
+        	if(i == 4)
+        		for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[pic_cnt+temporal_reference].ycbcr[1][r+m][c+n] = pic_buf[pel_past_for].ycbcr[1][r+m][c+n];
+        	else
+        		for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[pic_cnt+temporal_reference].ycbcr[2][r+m][c+n] = pic_buf[pel_past_for].ycbcr[2][r+m][c+n];
+		}
+	}
+	recon_right_for_prev = 0;
+    recon_down_for_prev = 0;
 }
 /*decode B-frame*/
 void decode_predictive_coded_macroblocks_b(int block_num){
-	;
+	int r, c, ycbcr_idx, right_back, down_back, right_half_back, down_half_back, right_for, down_for, right_half_for, down_half_for; 
+	if(block_num < 4){
+		right_for = recon_right_for >> 1 ;
+		down_for = recon_down_for >> 1 ;
+		right_half_for = recon_right_for - 2*right_for ;
+		down_half_for = recon_down_for - 2*down_for ;
+		right_back = recon_right_back >> 1 ;
+		down_back = recon_down_back >> 1 ;
+		right_half_back = recon_right_back - 2*right_back ;
+		down_half_back = recon_down_back - 2*down_back ;
+		ycbcr_idx = 0;
+		r = (mb_row<<4) + ((block_num>>1)<<3); // mb_row*16 + block_num/2*8
+        c = (mb_column<<4) + ((block_num&1)<<3); // mb_column*16 + block_num%2*8
+	}
+	else{
+		right_for = ( recon_right_for / 2 ) >> 1 ;
+		down_for = ( recon_down_for / 2 ) >> 1 ;
+		right_half_for = recon_right_for/2 - 2*right_for ;
+		down_half_for = recon_down_for/2 - 2*down_for;
+		right_back = ( recon_right_back / 2 ) >> 1 ;
+		down_back = ( recon_down_back / 2 ) >> 1 ;
+		right_half_back = recon_right_back/2 - 2*right_back ;
+		down_half_back = recon_down_back/2 - 2*down_back;
+		r = mb_row<<3; // mb_row*8
+        c = mb_column<<3; // mb_column*8
+		if(block_num == 4) ycbcr_idx = 1;
+		else ycbcr_idx = 2;
+	}
+	if(macroblock_motion_forward){
+		fill_pel(pel_for, right_for, down_for, right_half_for, down_half_for, pel_past_for, r, c, ycbcr_idx);
+		if(macroblock_motion_backward){
+			fill_pel(pel_back, right_back, down_back, right_half_back, down_half_back, pel_past_back, r, c, ycbcr_idx);
+			for(int m = 0; m < 8; m++) for(int n = 0; n < 8; n++) pel[m][n] = (pel_for[m][n] + pel_back[m][n])/2;
+		}
+		else
+			for(int m = 0; m < 8; m++) for(int n = 0; n < 8; n++) pel[m][n] = pel_for[m][n];
+	}
+	else fill_pel(pel, right_back, down_back, right_half_back, down_half_back, pel_past_back, r, c, ycbcr_idx);
+
+	/*recon dct*/
+	for (int m=0; m<8; m++) {
+		for (int n=0; n<8; n++) {
+			int i = scan[m][n] ;
+			dct_recon[m][n] = ( ((2*dct_zz[i])+Sign(dct_zz[i])) * quantizer_scale * non_intra_quantizer_matrix[m][n] ) /16 ;
+			if ( ( dct_recon[m][n] & 1 ) == 0 )	dct_recon[m][n] -= Sign(dct_recon[m][n]) ;
+			if (dct_recon[m][n] > 2047) dct_recon[m][n] = 2047 ;
+			if (dct_recon[m][n] < -2048) dct_recon[m][n] = -2048 ;
+			if(dct_zz[i] == 0) dct_recon[m][n] = 0;
+		}
+	}
+	/*IDCT*/
+	idct(dct_recon);
+
+	/*add pel to dct_recon*/
+    for(int m=0;m<8;m++){
+    	for(int n=0;n<8;n++){
+    		dct_recon[m][n] += pel[m][n];  		
+    	}
+    }
+    /*write to picture buffer*/
+    if(block_num < 4) {
+        fillY(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+    }
+    else {
+        if(block_num == 4)
+           fillCb(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        else
+           fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+    }
+}
+void skipped_macorblocks_b(){
+	for (int i = 0; i < 6; ++i)
+	{
+		decode_predictive_coded_macroblocks_b(i);
+	};
 }
 void block(int block_num){	
 	memset(dct_zz, 0, sizeof(int)*64);
@@ -139,7 +437,7 @@ void block(int block_num){
 			printf("==BLOCK(%d)==\n", block_num);
 		if(macroblock_intra){
 			if(block_num<4){
-				//dct_dc_size_luminance = dct_dc_differential = 0;
+				dct_dc_size_luminance = dct_dc_differential = 0;
 				dct_dc_size_luminance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_luminance_code, dct_dc_size_luminance_length, 
 												dct_dc_size_luminance_value, 9);
 				if(dct_dc_size_luminance != 0){ 
@@ -153,7 +451,7 @@ void block(int block_num){
 				}
 			}
 			else{
-				//dct_dc_size_chrominance = dct_dc_differential = 0;
+				dct_dc_size_chrominance = dct_dc_differential = 0;
 				dct_dc_size_chrominance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_chrominance_code, dct_dc_size_chrominance_length, 
 												dct_dc_size_chrominance_value, 9);
 				if(dct_dc_size_chrominance != 0){ 
@@ -202,6 +500,7 @@ void macroblock(){
 	static int mcb_cnt = 1;
 	if(DEBUG)
 		printf("==macroblock(%d)==\n", mcb_cnt++);
+	macroblock_stuffing = 0;
 	while(bitstream.nextbits()>>21 == 0b00000001111)
 		macroblock_stuffing = bitstream.read(11);
 	macroblock_address_increment = 0;
@@ -209,11 +508,27 @@ void macroblock(){
 		macroblock_escape = bitstream.read(11);
 		macroblock_address_increment += 33;
 	}
-	macroblock_address_increment += lookup((uint32_t)bitstream.nextbits(), mbai_code, mbai_code_length, mbai_code_value, 33);
+	macroblock_address_increment += lookup((uint32_t)bitstream.nextbits(), mbai_code, mbai_code_length, mbai_code_value, 33);	
+	/*skipped macroblocks*/
+	for(int i = 1; i < macroblock_address_increment; i++) {
+        // update macroblock_address
+        macroblock_address = previous_macroblock_address + i;
+        mb_row = macroblock_address / mb_width;
+        mb_column = macroblock_address % mb_width;
+        // P-frame
+        if(picture_coding_type == 2) {
+            skipped_macorblocks_p();
+        }
+        // B-frame
+        else if(picture_coding_type == 3) {
+            skipped_macorblocks_b();
+        }
+    }
 	macroblock_address = previous_macroblock_address + macroblock_address_increment;
     previous_macroblock_address = macroblock_address;
     mb_row = macroblock_address / mb_width;
     mb_column = macroblock_address % mb_width;
+
 	if(picture_coding_type == 1) macroblock_type = lookup((uint32_t)bitstream.nextbits(), mbtype_i, mbtype_i_length, mbtype_i_value, 2); // I
 	else if(picture_coding_type == 2) macroblock_type = lookup((uint32_t)bitstream.nextbits(), mbtype_p, mbtype_p_length, mbtype_p_value, 7); // P
 	else if (picture_coding_type == 3) macroblock_type = lookup((uint32_t)bitstream.nextbits(), mbtype_b, mbtype_b_length, mbtype_b_value, 11); // B
@@ -223,6 +538,7 @@ void macroblock(){
 	macroblock_motion_backward = (macroblock_type>>2)&1;
 	macroblock_pattern = (macroblock_type>>1)&1;
 	macroblock_intra = macroblock_type&1;
+
 	if(macroblock_quant) quantizer_scale = bitstream.read(5);
 	if(macroblock_motion_forward){
 		motion_horizontal_forward_code = lookup((uint32_t)bitstream.nextbits(), motion_code, motion_code_length, motion_code_value, 33);
@@ -236,6 +552,7 @@ void macroblock(){
 		motion_vertical_backward_code = lookup((uint32_t)bitstream.nextbits(), motion_code, motion_code_length, motion_code_value, 33);
 		if(backward_f != 1 && motion_vertical_backward_code != 0) motion_vertical_backward_r = bitstream.read(backward_r_size);
 	}
+
 	coded_block_pattern = 0;
 	if(macroblock_pattern) coded_block_pattern = lookup((uint32_t)bitstream.nextbits(), cbp_code, cbp_code_length, cbp_code_value, 63);
 	if(DEBUG)
@@ -246,13 +563,37 @@ void macroblock(){
 		if(coded_block_pattern&(1<<(5-i))) pattern_code[i] = 1;
 		if(macroblock_intra) pattern_code[i] = 1;
 	}
+
+	if(picture_coding_type == 2) {
+        recon_right_for = 0;
+        recon_down_for = 0;
+    }
+    else if(picture_coding_type == 3) {
+        recon_right_for = recon_right_for_prev;
+        recon_down_for = recon_down_for_prev;
+        recon_right_back = recon_right_back_prev;
+        recon_down_back = recon_down_back_prev;
+    }
+    // reconstruct motion vector
+    if(picture_coding_type == 2 || picture_coding_type == 3)
+        recon_forward_motion_vector();
+    if(picture_coding_type == 3)
+        recon_backward_motion_vector();
+
 	for(int i = 0; i < 6; i++){
 		block(i);
-		if(macroblock_intra) decode_intro_coded_macroblock(i);
+		if(macroblock_intra){
+			decode_intro_coded_macroblock(i);
+			recon_right_for_prev = 0;
+            recon_down_for_prev = 0;
+            recon_right_back_prev = 0;
+            recon_down_back_prev = 0;
+        }
 		else if(picture_coding_type == 2) decode_predictive_coded_macroblocks_p(i);
 		else decode_predictive_coded_macroblocks_b(i);
 	}
-	
+	if(macroblock_intra)
+		past_intra_address = macroblock_address ;
 	if(picture_coding_type == 4) end_of_macroblock = bitstream.read(1);
 
 }
@@ -266,6 +607,10 @@ void slice(){
     dct_dc_cb_past = 1024;
     dct_dc_cr_past = 1024;
     past_intra_address = -2;
+    recon_right_for_prev = 0;
+    recon_down_for_prev = 0;
+    recon_right_back_prev = 0;
+    recon_down_back_prev = 0;
 	quantizer_scale = bitstream.read(5);
 	while(bitstream.nextbits()>>31 == 1){
 		extra_bit_slice = bitstream.read(1);
@@ -286,6 +631,8 @@ void picture(){
 	if(bitstream.read(32) != picture_start_code)
 		return;
 	temporal_reference = bitstream.read(10);
+	if(temporal_reference >= max_temp)
+		max_temp = temporal_reference;
 	picture_coding_type = bitstream.read(3);
 	vbv_delay = bitstream.read(16);
 	if(picture_coding_type == 2 || picture_coding_type == 3){
@@ -318,14 +665,17 @@ void picture(){
 		while(bitstream.nextbits()>>8 != 0x000001) user_data = bitstream.read(8);
 		bitstream.next_start_code();
 	}
+	if(picture_coding_type == 1 || picture_coding_type == 2){
+		pel_past_for = pel_past_back;
+		pel_past_back = temporal_reference + pic_cnt;
+	}
 	do{
 		slice();
 	}while(bitstream.nextbits() >= slice_start_code_start && bitstream.nextbits() <= slice_start_code_end);
-	
 #ifdef DO_BMP
-    BMP((int)vertical_size, (int)horizontal_size, pic_cnt);
+    BMP((int)vertical_size, (int)horizontal_size, pic_cnt+temporal_reference, pic_buf);
 #endif
-   pic_cnt++; 
+   
 }
 void group_of_pictures(){
 	if(bitstream.read(32) != group_start_code)
@@ -412,8 +762,14 @@ void decode_video_sequence(){
 		sequence_header();
 		do{
 			group_of_pictures();
+			pic_cnt += max_temp+1; 
+			max_temp = 0;
 		}while(bitstream.nextbits() == group_start_code);
 		
 	}while(bitstream.nextbits() == sequence_header_code);
-	printf("end\n");
+	printf("Finish\n");
+}
+void get_hor_ver(int *horizontal, int *vertical){
+	*horizontal = horizontal_size;
+	*vertical = vertical_size;
 }

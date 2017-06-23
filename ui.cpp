@@ -3,6 +3,7 @@
 #include <process.h>
 #include <iostream>
 #include <cstdio>
+#include <string.h>
 #include "parser.h"
 #include "util.h" 
 #pragma comment(linker, "/subsystem:console /entry:WinMainCRTStartup")
@@ -12,10 +13,7 @@ const char g_szClassName[] = "myMpegDemoClass";
 int frame_cnt = 10; // prepare some loading time for opening and decoding
 extern PIC_BUF pic_buf[200];
 void run_background(void* argv) {
-    
-    //init_vlc();
     printf("%s\n", (char*)argv);
-    //char* filename = (char*) argv;
     if(decode_init((char*)argv, 0)) decode_video_sequence();
     cout << "decode process end" << endl;
 }
@@ -34,15 +32,14 @@ void ClientResize(HWND hWnd, int nWidth, int nHeight)
  
 void frame_update(HWND hwnd, double start_time) {
      
-    // Wait until next frame should be shown
-    /*while((double)(clock()-start_time)/1000 * pictures_per_second[picture_rate] < frame_cnt)
-        return;*/
-    
+    // Wait until next frame should be shown  
     while((clock()-start_time)/CLOCKS_PER_SEC < 1/pictures_per_second[picture_rate]);
     // Next frame
     frame_cnt++;
-    int width = 320;
-    int height = 240;
+    int horizontal, vertical;
+    get_hor_ver(&horizontal, &vertical);
+    int width = horizontal;//pic_buf[0].horizontal_size;
+    int height = vertical;//pic_buf[0].vertical_size;
     HDC hdc = GetDC(hwnd);
     HDC hdcMem = CreateCompatibleDC(hdc);
     HBITMAP hbm = CreateCompatibleBitmap(hdc, width, height);
@@ -56,9 +53,9 @@ void frame_update(HWND hwnd, double start_time) {
     static int frame_num = 0;
     for(int m = 0; m < height; m++) {
         for(int n = 0; n < width; n++) {
-            double dy = pic_buf[frame_num].y[m][n]-16.0;
-            double dcb = pic_buf[frame_num].cb[m>>1][n>>1]-128.0;
-            double dcr = pic_buf[frame_num].cr[m>>1][n>>1]-128.0;
+            double dy = pic_buf[frame_num].ycbcr[0][m][n]-16.0;
+            double dcb = pic_buf[frame_num].ycbcr[1][m>>1][n>>1]-128.0;
+            double dcr = pic_buf[frame_num].ycbcr[2][m>>1][n>>1]-128.0;
             int R = 0.5 + 255.0/219*dy + 255.0/112*0.701*dcr;
             int G = 0.5 + 255.0/219*dy - 255.0/112*0.886*0.114/0.587*dcb - 255.0/112*0.701*0.299/0.587*dcr;
             int B = 0.5 + 255.0/219*dy + 255.0/112*0.886*dcb;
@@ -104,8 +101,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     // Test thread
     // See http://stackoverflow.com/questions/5968076/passing-parameters-to-beginthreadex
-    char *filename = "MPEG/I_ONLY.M1V";
-    //if(__argc > 1) filename = __argv[1];
+    char filename[200];
+    printf("Please entering filename\n");
+    fflush(stdout);
+    scanf("%s", filename);
     _beginthread(run_background, 0, filename);
      
     WNDCLASSEX wc;
@@ -135,7 +134,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     hwnd = CreateWindowEx (
         WS_EX_CLIENTEDGE, // extended window style, can try 0 or more other values
         g_szClassName,
-        "MPEG decoder - B98902062",
+        "MPEG decoder",
         WS_OVERLAPPEDWINDOW, // window style parameter
         CW_USEDEFAULT, CW_USEDEFAULT, 320, 240, // X and Y co-ordinate of left top, width, height
         NULL, NULL, hInstance, NULL // parent window handle, menu handle, application instance handle, pointer to window creation data
