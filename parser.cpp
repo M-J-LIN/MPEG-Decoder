@@ -9,10 +9,11 @@
 static int DEBUG = 0;
 static int pic_cnt = 0;
 static int max_temp = 0;
-PIC_BUF pic_buf[200];
+PIC_BUF pic_buf[200];//picture buffer
 //#define DO_BMP
 InBitStream bitstream;
-int Sign(int a){ return (a > 0) ? 1 : (a < 0) ? -1 : 0;}
+int Sign(int a){ return (a > 0) ? 1 : (a < 0) ? -1 : 0;} // return 1 or -1 or 0
+/*initial and open file*/
 int decode_init(char *filename, int debug){
 	DEBUG = debug;
 	bitstream.open(filename);
@@ -25,6 +26,7 @@ int decode_init(char *filename, int debug){
 		return 0;
 	}
 }
+/*general lookup routine*/
 int lookup(uint32_t bits, const int code[], const int length[], const int value[], int size){
 	for(int i = 0; i < size; i++){		
 		if(bits>>(32-length[i]) == code[i]){
@@ -35,6 +37,7 @@ int lookup(uint32_t bits, const int code[], const int length[], const int value[
 	printf("lookup error!\n");
 	exit(0);
 }
+/*special purpose lookup routine for coeff first and next*/
 int lookup_coeff(uint32_t bits, const int code[], const int length[], const int run[], const int level[], int size, int *_run, int *_level){
 	for(int i = 0; i < size; i++){		
 		if(bits>>(32-length[i]) == code[i]){
@@ -46,9 +49,9 @@ int lookup_coeff(uint32_t bits, const int code[], const int length[], const int 
 				if(DEBUG) printf("dct_dc_first: ESCAPE\n");
 	            *_run = bitstream.read(6);
 	            int prefix = bitstream.read(8);
-	            if(prefix == 0x80) // '1000 0000'
+	            if(prefix == 0x80) 
 	                *_level = -256 + bitstream.read(8);
-	            else if(prefix == 0x0) // '0000 0000'
+	            else if(prefix == 0x0) 
 	                *_level = bitstream.read(8);
 	            else {
 	                if(prefix>>7 == 1) *_level = -128 + (prefix&0x7f);
@@ -97,6 +100,7 @@ void decode_intro_coded_macroblock(int block_num){
     if(block_num < 4) dct_dc_y_past = dct_recon[0][0];
     else if(block_num == 4) dct_dc_cb_past = dct_recon[0][0];
     else dct_dc_cr_past = dct_recon[0][0];   
+
     /*IDCT*/
     idct(dct_recon);
     if(DEBUG){
@@ -107,6 +111,7 @@ void decode_intro_coded_macroblock(int block_num){
     		printf("\n");
     	}
     }
+    /*write to picture buffer*/
     if(block_num < 4) {
         int r = (mb_row<<4) + ((block_num>>1)<<3); // mb_row*16 + block_num/2*8
         int c = (mb_column<<4) + ((block_num&1)<<3); // mb_column*16 + block_num%2*8
@@ -243,7 +248,7 @@ void recon_backward_motion_vector(){
 		recon_right_back <<= 1;
 	}
 }
-/*compute pel*/
+/*compute pel for P and B frame*/
 void fill_pel(int pel[8][8], int right_for_back, int down_for_back, int right_half_for_back, int down_half_for_back
 			  ,int pel_past_for_back, int r, int c, int ycbcr_idx){
 	if(!right_half_for_back){
@@ -301,7 +306,7 @@ void decode_predictive_coded_macroblocks_p(int block_num){
 
 	fill_pel(pel_for, right_for, down_for, right_half_for, down_half_for, pel_past_for, r, c, ycbcr_idx);
 	
-	/*recon dct*/
+	/*reconstruct dct*/
 	for (int m=0; m<8; m++) {
 		for (int n=0; n<8; n++) {
 			int i = scan[m][n] ;
@@ -332,6 +337,7 @@ void decode_predictive_coded_macroblocks_p(int block_num){
            fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
     }
 }
+/*skip macroblocks for P-frame*/
 void skipped_macorblocks_p(){
 	for(int i = 0; i < 6; i++){
 		if(i < 4){
@@ -392,7 +398,7 @@ void decode_predictive_coded_macroblocks_b(int block_num){
 	}
 	else fill_pel(pel, right_back, down_back, right_half_back, down_half_back, pel_past_back, r, c, ycbcr_idx);
 
-	/*recon dct*/
+	/*reconstruct dct*/
 	for (int m=0; m<8; m++) {
 		for (int n=0; n<8; n++) {
 			int i = scan[m][n] ;
@@ -423,12 +429,14 @@ void decode_predictive_coded_macroblocks_b(int block_num){
            fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
     }
 }
+/*skip macroblocks for B-frame*/
 void skipped_macorblocks_b(){
 	for (int i = 0; i < 6; ++i)
 	{
 		decode_predictive_coded_macroblocks_b(i);
 	};
 }
+/*decode block*/
 void block(int block_num){	
 	memset(dct_zz, 0, sizeof(int)*64);
 	int zz_pos = 0, run, level, ret;
@@ -436,6 +444,7 @@ void block(int block_num){
 		if(DEBUG)
 			printf("==BLOCK(%d)==\n", block_num);
 		if(macroblock_intra){
+			/*Y*/
 			if(block_num<4){
 				dct_dc_size_luminance = dct_dc_differential = 0;
 				dct_dc_size_luminance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_luminance_code, dct_dc_size_luminance_length, 
@@ -450,6 +459,7 @@ void block(int block_num){
 					printf("\tdct_dc_differential_luminance: %d\n", dct_dc_differential);
 				}
 			}
+			/*Cb Cr*/
 			else{
 				dct_dc_size_chrominance = dct_dc_differential = 0;
 				dct_dc_size_chrominance = lookup((uint32_t)bitstream.nextbits(), dct_dc_size_chrominance_code, dct_dc_size_chrominance_length, 
@@ -496,6 +506,7 @@ void block(int block_num){
 		}
 	}
 }
+/*decode macroblock*/
 void macroblock(){
 	static int mcb_cnt = 1;
 	if(DEBUG)
@@ -557,6 +568,7 @@ void macroblock(){
 	if(macroblock_pattern) coded_block_pattern = lookup((uint32_t)bitstream.nextbits(), cbp_code, cbp_code_length, cbp_code_value, 63);
 	if(DEBUG)
 		printf("macroblock_address_increment = %d, macroblock_type = %d, cbp = %d\n", macroblock_address_increment, macroblock_type, coded_block_pattern);
+	/*update pattern_code*/
 	memset(pattern_code, 0, sizeof(pattern_code[0])*6);
 	for (int i = 0; i < 6; i++)
 	{
@@ -579,7 +591,7 @@ void macroblock(){
         recon_forward_motion_vector();
     if(picture_coding_type == 3)
         recon_backward_motion_vector();
-
+    /*start decode blocks*/
 	for(int i = 0; i < 6; i++){
 		block(i);
 		if(macroblock_intra){
@@ -597,6 +609,7 @@ void macroblock(){
 	if(picture_coding_type == 4) end_of_macroblock = bitstream.read(1);
 
 }
+/*decode slice*/
 void slice(){
 	int start_code = bitstream.read(32);
 	if(start_code < slice_start_code_start || start_code > slice_start_code_end)
@@ -624,8 +637,8 @@ void slice(){
 	}while(bitstream.nextbits()>>9 != 0);
 	bitstream.next_start_code();
 }
+/*decode picture*/
 void picture(){
-	
 	if(DEBUG)
 		printf("==picture(%d)==\n", pic_cnt);
 	if(bitstream.read(32) != picture_start_code)
@@ -672,11 +685,12 @@ void picture(){
 	do{
 		slice();
 	}while(bitstream.nextbits() >= slice_start_code_start && bitstream.nextbits() <= slice_start_code_end);
+/*output BMP for debug*/
 #ifdef DO_BMP
     BMP((int)vertical_size, (int)horizontal_size, pic_cnt+temporal_reference, pic_buf);
-#endif
-   
+#endif 
 }
+/*decode group*/
 void group_of_pictures(){
 	if(bitstream.read(32) != group_start_code)
 		return;
@@ -708,6 +722,7 @@ void group_of_pictures(){
 		picture();
 	}while(bitstream.nextbits() == picture_start_code);
 }
+/*decode sequence header*/
 void sequence_header(){
 	if(bitstream.read(32) != sequence_header_code)
 		return;
@@ -756,6 +771,7 @@ void sequence_header(){
 	}
 	
 }
+/*decode process start*/
 void decode_video_sequence(){
 	bitstream.next_start_code();
 	do{
@@ -769,6 +785,7 @@ void decode_video_sequence(){
 	}while(bitstream.nextbits() == sequence_header_code);
 	printf("Finish\n");
 }
+/*get horizontal_size and vertical_size for GUI window*/
 void get_hor_ver(int *horizontal, int *vertical){
 	*horizontal = horizontal_size;
 	*vertical = vertical_size;

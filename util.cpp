@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "util.h"
+/*IDCT*/
 void idct(int matrix[8][8]) {
     double tmp[8][8];
     for(int x = 0; x < 8; x++) {
@@ -61,6 +62,7 @@ void idct(int matrix[8][8]) {
         matrix[y][4] = 0.5 + a3 - b3;
     }
 }
+/*using y cb cr to combine R*/
 int R(int y, int cb, int cr){
 	float sum = y+1.402*(cr-128);
 	if(sum >= 255)
@@ -70,6 +72,7 @@ int R(int y, int cb, int cr){
 	else
 		return sum;
 }
+/*using y cb cr to combine G*/
 int G(int y, int cb, int cr){
 	float sum = y-0.34414*(cb-128)-0.71414*(cr-128);
 	if(sum >= 255)
@@ -79,6 +82,7 @@ int G(int y, int cb, int cr){
 	else
 		return sum;
 }
+/*using y cb cr to combine B*/
 int B(int y, int cb, int cr){
 	float sum = y+1.772*(cb-128);
 	if(sum >= 255)
@@ -88,7 +92,7 @@ int B(int y, int cb, int cr){
 	else
 		return sum;
 }
-
+/*output BMP file*/
 static uint8_t bmp[1024][1024][3];
 void genbmp(int height, int width, int frame_num){
 	typedef struct { 
@@ -138,6 +142,7 @@ void genbmp(int height, int width, int frame_num){
 	
 	fclose(wfp);	
 }
+/*generate bmp buffer*/
 void BMP(int height, int width, int frame_num, PIC_BUF pic_buf[]){
 	int cb_h_idx, cr_h_idx, cb_w_idx, cr_w_idx;
 	for (int i = 0; i < height; i++){
@@ -149,12 +154,15 @@ void BMP(int height, int width, int frame_num, PIC_BUF pic_buf[]){
 	}
 	genbmp(height, width, frame_num);
 }
+/*fill y to picture buffer*/
 void fillY(int r, int c, int dct_recon[8][8], int frame_num, PIC_BUF pic_buf[]){
 	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].ycbcr[0][r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
 }
+/*fill cb to picture buffer*/
 void fillCb(int r, int c, int dct_recon[8][8], int frame_num, PIC_BUF pic_buf[]){
 	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].ycbcr[1][r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
 }
+/*fill cr to picture buffer*/
 void fillCr(int r, int c, int dct_recon[8][8], int frame_num, PIC_BUF pic_buf[]){
 	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[frame_num].ycbcr[2][r+m][c+n] = (dct_recon[m][n]<0)?0:(dct_recon[m][n]>255)?255:dct_recon[m][n];
 }
