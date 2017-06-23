@@ -101,11 +101,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     // Test thread
     // See http://stackoverflow.com/questions/5968076/passing-parameters-to-beginthreadex
-    char filename[200];
-    printf("Please entering filename\n");
-    fflush(stdout);
-    scanf("%s", filename);
-    _beginthread(run_background, 0, filename);
+    int argc = 0; 
+    LPWSTR *argv; 
+    argv = CommandLineToArgvW ((LPCWSTR )lpCmdLine, &argc); 
+    _beginthread(run_background, 0, (char *)argv[0]);
      
     WNDCLASSEX wc;
     HWND hwnd;
