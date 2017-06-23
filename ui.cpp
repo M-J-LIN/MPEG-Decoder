@@ -7,14 +7,14 @@
 #include "parser.h"
 #include "util.h" 
 #pragma comment(linker, "/subsystem:console /entry:WinMainCRTStartup")
- 
+#define DEBUG 0 
 using namespace std;
 const char g_szClassName[] = "myMpegDemoClass";
 int frame_cnt = 10; // prepare some loading time for opening and decoding
 extern PIC_BUF pic_buf[200];
 void run_background(void* argv) {
     printf("%s\n", (char*)argv);
-    if(decode_init((char*)argv, 0)) decode_video_sequence();
+    if(decode_init((char*)argv, DEBUG)) decode_video_sequence();
     cout << "decode process end" << endl;
 }
  

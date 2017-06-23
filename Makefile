@@ -1,6 +1,6 @@
 target: done
 done: GUI
-#	rm *.o
+	rm *.o
 CC = g++
 CFLAGS = -static -O2
 SRC = main.cpp parser.cpp util.cpp bitstream.cpp
@@ -21,6 +21,6 @@ GUI:$(OBJS_UI)
 .cpp.o:
 	$(CC) $(CFLAGS) -c -o $@ $<
 run:
-	./decoder MPEG/IPB_ALL.M1V
+	./GUI MPEG/IPB_ALL.M1V
 clean:
 	rm *.o *.exe *.bmp
