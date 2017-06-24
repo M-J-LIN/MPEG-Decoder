@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <Windows.h>
 #include "parser.h"
 #include "bitstream.h"
 #include "vlc.h"
@@ -9,7 +10,9 @@
 static int DEBUG = 0;
 static int pic_cnt = 0;
 static int max_temp = 0;
+static int max_pic_cnt = 0;
 PIC_BUF pic_buf[200];//picture buffer
+static int buf_size = 200;
 //#define DO_BMP
 InBitStream bitstream;
 int Sign(int a){ return (a > 0) ? 1 : (a < 0) ? -1 : 0;} // return 1 or -1 or 0
@@ -19,6 +22,8 @@ int decode_init(char *filename, int debug){
 	bitstream.open(filename);
 	if(bitstream.isOpen()){
 		printf("File %s is opened.\n", filename);
+		for (int i = 0; i < buf_size; ++i)
+			pic_buf[i].can_not_write = 0;
 		return 1;
 	}
 	else{
@@ -115,15 +120,17 @@ void decode_intro_coded_macroblock(int block_num){
     if(block_num < 4) {
         int r = (mb_row<<4) + ((block_num>>1)<<3); // mb_row*16 + block_num/2*8
         int c = (mb_column<<4) + ((block_num&1)<<3); // mb_column*16 + block_num%2*8
-        fillY(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        fillY(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
     }
     else {
         int r = mb_row<<3; // mb_row*8
         int c = mb_column<<3; // mb_column*8
-        if(block_num == 4)
-           fillCb(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
-        else
-           fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        if(block_num == 4){
+        	fillCb(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
+        }
+        else{
+        	fillCr(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
+        }
     }
 }
 /*recontruct forward motion vector*/
@@ -328,13 +335,15 @@ void decode_predictive_coded_macroblocks_p(int block_num){
     }
     /*write to picture buffer*/
     if(block_num < 4) {
-        fillY(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        fillY(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
     }
     else {
-        if(block_num == 4)
-           fillCb(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
-        else
-           fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        if(block_num == 4){
+            fillCb(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
+        }
+        else{
+            fillCr(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
+        }
     }
 }
 /*skip macroblocks for P-frame*/
@@ -343,15 +352,17 @@ void skipped_macorblocks_p(){
 		if(i < 4){
 			int r = (mb_row<<4) + ((i>>1)<<3); // mb_row*16 + block_num/2*8
         	int c = (mb_column<<4) + ((i&1)<<3); // mb_column*16 + block_num%2*8
-        	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[pic_cnt+temporal_reference].ycbcr[0][r+m][c+n] = pic_buf[pel_past_for].ycbcr[0][r+m][c+n];
+        	for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[(pic_cnt+temporal_reference)%buf_size].ycbcr[0][r+m][c+n] = pic_buf[pel_past_for].ycbcr[0][r+m][c+n];
 		}
 		else{
 			int r = mb_row<<3; // mb_row*8
         	int c = mb_column<<3; // mb_column*8
-        	if(i == 4)
-        		for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[pic_cnt+temporal_reference].ycbcr[1][r+m][c+n] = pic_buf[pel_past_for].ycbcr[1][r+m][c+n];
-        	else
-        		for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[pic_cnt+temporal_reference].ycbcr[2][r+m][c+n] = pic_buf[pel_past_for].ycbcr[2][r+m][c+n];
+        	if(i == 4){
+        		for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[(pic_cnt+temporal_reference)%buf_size].ycbcr[1][r+m][c+n] = pic_buf[pel_past_for].ycbcr[1][r+m][c+n];
+        	}
+        	else{
+        		for(int m=0;m<8;m++) for(int n=0;n<8;n++) pic_buf[(pic_cnt+temporal_reference)%buf_size].ycbcr[2][r+m][c+n] = pic_buf[pel_past_for].ycbcr[2][r+m][c+n];
+        	}
 		}
 	}
 	recon_right_for_prev = 0;
@@ -420,13 +431,15 @@ void decode_predictive_coded_macroblocks_b(int block_num){
     }
     /*write to picture buffer*/
     if(block_num < 4) {
-        fillY(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        fillY(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
     }
     else {
-        if(block_num == 4)
-           fillCb(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
-        else
-           fillCr(r, c, dct_recon, pic_cnt+temporal_reference, pic_buf);
+        if(block_num == 4){
+            fillCb(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
+        }
+        else{
+            fillCr(r, c, dct_recon, (pic_cnt+temporal_reference)%buf_size, pic_buf);
+        }
     }
 }
 /*skip macroblocks for B-frame*/
@@ -646,6 +659,7 @@ void picture(){
 	temporal_reference = bitstream.read(10);
 	if(temporal_reference >= max_temp)
 		max_temp = temporal_reference;
+	while(pic_buf[(pic_cnt+temporal_reference)%buf_size].can_not_write) {Sleep(10);}
 	picture_coding_type = bitstream.read(3);
 	vbv_delay = bitstream.read(16);
 	if(picture_coding_type == 2 || picture_coding_type == 3){
@@ -680,14 +694,15 @@ void picture(){
 	}
 	if(picture_coding_type == 1 || picture_coding_type == 2){
 		pel_past_for = pel_past_back;
-		pel_past_back = temporal_reference + pic_cnt;
+		pel_past_back = (pic_cnt+temporal_reference)%buf_size;
 	}
 	do{
 		slice();
 	}while(bitstream.nextbits() >= slice_start_code_start && bitstream.nextbits() <= slice_start_code_end);
+	pic_buf[(pic_cnt+temporal_reference)%buf_size].can_not_write = 1;
 /*output BMP for debug*/
 #ifdef DO_BMP
-    BMP((int)vertical_size, (int)horizontal_size, pic_cnt+temporal_reference, pic_buf);
+    BMP((int)vertical_size, (int)horizontal_size, (pic_cnt+temporal_reference)%buf_size, pic_buf);
 #endif 
 }
 /*decode group*/
@@ -778,7 +793,9 @@ void decode_video_sequence(){
 		sequence_header();
 		do{
 			group_of_pictures();
-			pic_cnt += max_temp+1; 
+			pic_cnt += max_temp+1;			
+			pic_cnt %= buf_size; 
+			max_pic_cnt += max_temp+1;
 			max_temp = 0;
 		}while(bitstream.nextbits() == group_start_code);
 		
@@ -786,7 +803,8 @@ void decode_video_sequence(){
 	printf("Finish\n");
 }
 /*get horizontal_size and vertical_size for GUI window*/
-void get_hor_ver(int *horizontal, int *vertical){
+void get_hor_ver(int *horizontal, int *vertical, int *max_pic_num){
 	*horizontal = horizontal_size;
 	*vertical = vertical_size;
+	*max_pic_num = max_pic_cnt;
 }

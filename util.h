@@ -16,6 +16,7 @@ static const float cos_tb[8][8] = {
 	  1.000000,  -0.831470,   0.382683,   0.195090,  -0.707107,   0.980785,  -0.923880,   0.555570, 
 	  1.000000,  -0.980785,   0.923880,  -0.831470,   0.707107,  -0.555570,   0.382683,  -0.195090 };
 typedef struct PIC_BUF{
+	int can_not_write;
 	unsigned char ycbcr[3][1024][1024];
 }PIC_BUF;
 void idct(int matrix[8][8]);

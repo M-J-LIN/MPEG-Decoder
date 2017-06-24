@@ -151,5 +151,5 @@
 	static int recon_down_back_prev;
 int decode_init(char *filename, int debug);
 void decode_video_sequence();
-void get_hor_ver(int *horizontal, int *vertical);
+void get_hor_ver(int *horizontal, int *vertical, int *max_pic_num);
 #endif

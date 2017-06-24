@@ -7,10 +7,12 @@
 #include "parser.h"
 #include "util.h" 
 #pragma comment(linker, "/subsystem:console /entry:WinMainCRTStartup")
-#define DEBUG 0 
+#define DEBUG 0
 using namespace std;
 const char g_szClassName[] = "myMpegDemoClass";
-int frame_cnt = 10; // prepare some loading time for opening and decoding
+int frame_cnt = 0; // prepare some loading time for opening and decoding
+int max_pic_num;
+int buf_size = 200;
 extern PIC_BUF pic_buf[200];
 void run_background(void* argv) {
     printf("%s\n", (char*)argv);
@@ -37,7 +39,7 @@ void frame_update(HWND hwnd, double start_time) {
     // Next frame
     frame_cnt++;
     int horizontal, vertical;
-    get_hor_ver(&horizontal, &vertical);
+    get_hor_ver(&horizontal, &vertical, &max_pic_num);
     int width = horizontal;//pic_buf[0].horizontal_size;
     int height = vertical;//pic_buf[0].vertical_size;
     HDC hdc = GetDC(hwnd);
@@ -65,13 +67,14 @@ void frame_update(HWND hwnd, double start_time) {
             buffer[m * width + n] = (R<<16)|(G<<8)|B;
         }
     }
+    pic_buf[frame_num].can_not_write = 0;
     // And set to HBITMAP
     SetBitmapBits(hbm, width * height * sizeof(int), buffer);
      
     // Window's size is fixed, so just use BitBlt
     BitBlt(hdc, 0, 0, width, height, hdcMem, 0, 0, SRCCOPY);
-    frame_num++;
-    cout << frame_num<<endl; 
+    frame_num = (frame_num+1)%buf_size;
+    //cout << frame_num<<endl; 
 
      
     // Output
@@ -80,6 +83,11 @@ void frame_update(HWND hwnd, double start_time) {
     DeleteDC(hdcMem);
     ReleaseDC(hwnd, hdc);
     delete [] buffer;
+    cout << frame_cnt << " " << max_pic_num << endl;
+    if(frame_cnt == max_pic_num){
+        system("pause");
+        exit(0);
+    }
      
 }
  
