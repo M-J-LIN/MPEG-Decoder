@@ -14,6 +14,7 @@ int frame_cnt = 0; // prepare some loading time for opening and decoding
 int max_pic_num;
 int buf_size = 200;
 extern PIC_BUF pic_buf[200];
+int Flag = 0;
 void run_background(void* argv) {
     printf("%s\n", (char*)argv);
     if(decode_init((char*)argv, DEBUG)) decode_video_sequence();
@@ -85,8 +86,8 @@ void frame_update(HWND hwnd, double start_time) {
     delete [] buffer;
     cout << frame_cnt << " " << max_pic_num << endl;
     if(frame_cnt == max_pic_num){
+		Flag = 1;
         system("pause");
-        exit(0);
     }
      
 }
@@ -156,7 +157,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
      
     // Modified Step 3.   
     Sleep(1000);
-    while(1) {
+    while(!Flag) {
        
         if(PeekMessage(&Msg, NULL, 0, 0, 0)) {  // non-blocking
             if(GetMessage(&Msg, NULL, 0, 0) > 0) {

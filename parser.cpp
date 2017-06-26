@@ -489,7 +489,7 @@ void block(int block_num){
 			}
 		}
 		else{
-			ret = lookup_coeff((uint32_t)bitstream.nextbits(), dct_coeff_first_code, dct_coeff_first_length, dct_coeff_first_run, dct_coeff_first_level, 113, &run, &level);
+			ret = lookup_coeff((uint32_t)bitstream.nextbits(), dct_coeff_first_code, dct_coeff_first_length, dct_coeff_first_run, dct_coeff_first_level, 112, &run, &level);
 			if(ret == -1){
 				if(DEBUG)
 					printf("EOB-1\n");
