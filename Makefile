@@ -23,4 +23,4 @@ GUI:$(OBJS_UI)
 run:
 	./GUI MPEG/IPB_ALL.M1V
 clean:
-	rm *.o *.exe *.bmp
+	rm -f *.o *.exe *.bmp

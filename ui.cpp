@@ -87,7 +87,6 @@ void frame_update(HWND hwnd, double start_time) {
     cout << frame_cnt << " " << max_pic_num << endl;
     if(frame_cnt == max_pic_num){
 		Flag = 1;
-        system("pause");
     }
      
 }
@@ -170,5 +169,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         double start_time = clock();
         frame_update(hwnd, start_time);
     }
-    return Msg.wParam;
+    system("pause");
+    return 0;
 }

@@ -1,1 +1,11 @@
-# MPEG-Decoder
+## compile
+```
+make
+```
+
+## run example
+
+```
+make run
+```
+
